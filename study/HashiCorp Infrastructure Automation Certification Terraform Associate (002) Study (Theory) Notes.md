@@ -1,7 +1,8 @@
 # HashiCorp Infrastructure Automation Certification / Terraform Associate (002) Study  (Theory) Notes
 
 **Date:** *02-14-2023* 
-**Author:** [`@GangGreenTemperTatum`](https:github.com/ganggreentempertatum) 
+
+**Author:** [`@GangGreenTemperTatum`](https://github.com/GangGreenTemperTatum)
 
 ### Resources:
 * [HashiCorp Infrastructure Automation Certification](https://www.hashicorp.com/certification/Terraform-associate)
