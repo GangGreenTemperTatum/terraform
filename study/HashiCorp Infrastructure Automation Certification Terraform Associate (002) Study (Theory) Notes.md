@@ -1201,8 +1201,23 @@ locals {
 
 ### Terraform Module Versions
 
-* The easiest way to create a versioned module is to put the code for the module in a separate Git repository and to set the source parameter to that repository’s URL.
+* The easiest way to create a versioned module is to put the code for the module in a separate Git repository and to set the source parameter to that repository’s URL (Terraform `source` parameter)
 * Recommended to use Git Tag's for logical references for naming convention of Terraform Module versions
+  * The ref parameter allows you to specify a particular Git commit via its sha1 hash, a branch name, or, as in this example, a specific Git tag.
+  * **Use Semantic Versioning** (`MAJOR.MINOR.PATCH`) for GitOps tags
+
+```
+module "webserver_cluster" {
+  source = "github.com/foo/modules//services/webserver-cluster?ref=v0.0.1"
+cluster_name           = "webservers-stage"
+  db_remote_state_bucket = "(YOUR_BUCKET_NAME)"
+  db_remote_state_key    = "stage/data-stores/mysql/terraform.tfstate"
+
+  instance_type = "t2.micro"
+  min_size      = 2
+  max_size      = 2
+}
+```
 
 ....
 
