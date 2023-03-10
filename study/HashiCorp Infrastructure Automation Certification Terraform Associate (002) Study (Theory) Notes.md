@@ -1054,6 +1054,162 @@ code
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 
+📖 `Terraform: Up and Running, 3rd Edition` Book Notes
+
+[Terraform: Up and Running, 3rd Edition](https://www.oreilly.com/library/view/Terraform-up-and/9781098116736/)
+	
+- The goal of DevOps is to make software delivery vastly more efficient.
+- There are four core values in the DevOps movement: (CAMS)
+- The idea of IaC is that you write and execute code to define, deploy, update, and destroy your infrastructure.    
+
+1) Culture
+2) Automation
+3) Measurement
+4) Sharing
+
+- The idea of immutable infrastructure is to destroy and re-deploy fresh updated version from a Server Template, rather than continuously update which is a main preventative measure to avoid configuration drift and allows for more flexibility when utilizing reusable code.
+
+There are five broad categories of IaC tools: 
+
+1) Ad hoc scripts (I.E build script, most commonly designed to run on a single local system)
+- Code that works correctly no matter how many times you run it is called idempotent code.
+2) Configuration management tools (Chef, Puppet, and Ansible (which is idemoptent by default and also lean towards a mutable infrastructure paradigm but can be forced to be immutable))
+- Ansible being idempotent meaning an Ansible role will install Apache only if it isn’t installed already and will try to start the Apache web server only if it isn’t running already. 
+3) Server templating tools (Docker, Packer and Vagrant) (Create the image of a server as a snapshot in time, including OS, applications, libraries, versions etc.)
+- A virtual machine (VM) emulates an entire computer system, including the hardware and runs on a hypervisor
+- A container emulates the user space of an operating system where the kernel and hardware are shared
+4) Orchestration tools (Kubernetes, Marathon/Mesos, Amazon Elastic Container Service, Docker Swarm, Nomad)
+5) Provisioning tools (Terraform, CloudFormation, OpenStack, Heat, Pulimi) are responsible for deploying IaC that supports the above and most commonly always takes an immutable paradigm approach
+
+It is common to use a combination of Terraform and Ansible for example, `Terrible'.. wappp wahhhhppp
+
+- Terraform is written in `HCL2` (HashiCorp Language) and config is JSON-format, stored as `.tf.` file extensions.
+  - HCL2 was adopted in Terraform version >=0.12
+- Terraform is open-source and written in Go programming language
+- Terraform is a DSL (Domain-Specific Language), compared to GPL (General Purpose Language - I.E supports multiple programming language approaches) whereas the code may be more simplistic, but functionality is limited to that specific tool
+- Terraform works by the terraform binary makes API calls on your behalf to one or more providers, such as AWS, Azure, Google Cloud, DigitalOcean, OpenStack, and more (AKA Providers)
+- Terraform does not use a Master server for running IaC (compared to Chef for example) and is **Masterless** and only requires a client with Terraform installed and is also **Agentless** in theory
+
+[Terraform Up and Running Book "Code Examples"](https://github.com/brikis98/terraform-up-and-running-code)
+`git clone https://github.com/brikis98/terraform-up-and-running-code.git`
+
+## Declarative vs Imperative:
+* Imperative programming is like giving a chef step-by-step instructions on how to make a pizza. (Chef and Ansible encourage a procedural style in which you write code that specifies, step by step, how to achieve some desired end state)
+- Vanilla JavaScript is an example of Imperative programming
+* Declarative programming is like ordering a pizza without being concerned about the steps it takes to make the pizza. 
+- React is a popular example of Declarative programming.
+
+Imperative code focuses on writing an explicit sequence of commands to describe how you want the computer to do things using procedural scripts, and declarative code focuses on specifying the result of what you want; and by instructing Terraform to work out the end desired state of infrastructure based on what is currently spinning.
+- **Procedural code does not fully capture the state of the infrastructure**
+
+-  Compared to GitOps Configuration Management tools such as Jenkins or Ansible, Terraform uses a `Declarative Language` perspective
+- I.E, when deploying a Terraform `main.tf`, Teraform Declarative nature will state what the end-goal/desired objective or state of the infrastructure is
+  - I.E, if 15 EC2 instances are deployed on initial Terraform `Apply`, and later the configuration is updated to reflected 20 EC2 instances; Terraform is able to read the state and operations of the infrastructure and calculate that 5 additional instances are required which would reflect in the Terraform `Plan` and also does not remove the initial 15.
+- However, an Imperative Language model such as Ansible would end up configuring a total of 35 instances (1 push of 15 EC2 instances and 1 push of 20 EC2 instances)
+
+* Every time you run Terraform, it records information about what infrastructure it created in a Terraform state file (`terraform.tfstate` custom JSON-format file is stored in the current working root directory where Terraform actions are performed) and reflects a log output of Terraform history, the Terraform state is details about the deployment and changes made during its lifecycle. This may also contain plain-text secrets and sensitive output and therefore is recommended to be added to a `.gitignore` file when managing Terraform deployments via version control, such as Git.
+* The output of the Terraform `plan` command is a diff between the code on your computer and the infrastructure deployed in the real world, as discovered via IDs in the state file.
+* `terraform.tftstate` is a private API and should not be directly edited.
+* Locking Terraform state is a requirement for shared `terraform.tfstate` to allow for collaborating teams to keep up-to-date code and eliminate configuration drift and is simply a configuration lock on the Terraform operation. In this case, Terraform State files should also always be shared.
+* When re-configuring a Terraform state, I.E local to remote, Terraform will acknowledge, recognize and copy over the `terraform.tfstate` when you perform a `terraform init` to load the config and provider (supporting backend remote resource)
+* Terraform workspaces allow you to store your Terraform state in multiple, separate, named workspaces and are **completely isolated**, but not recommended for production as state files are saved on the same remote location with the same authentication & authorization permissions. 
+* Terraform starts with a single workspace called “default,” and if you never explicitly specify a workspace, the default workspace is the one you’ll use the entire time.
+  * Workspaces are not visible within the configuration files or unless explicitly stated using Workspace commands in the terminal
+
+Terraform outputs dependencies output in graph description language (GDL), called DOT. Recommended to better visualize this with tools such as [GraphvizOnline](https://graphviz.org/). An example dependency for an EC2 instance is a VPC, Security Group, Region etc.
+
+- Terraform Config Tags/Variables:
+
+`prevent_destroy`
+
+* Terraform will error if a remote resource following provision with this tag, is attempted to be destroyed and prevents accidental destruction of remote infrastructure - I.E AWS S3 bucket storing the Terraform state
+
+`aws_s3_bucket_versioning`
+
+* S3 bucket will store versions of Terraform state to provide individual copies/files of the Terraform state over its lifecycle, aswell as a fallback reversion plan
+
+`terraform_remote_state`
+
+* You can use this data source to fetch the Terraform state file stored by another set of Terraform configurations.
+
+- Example Terraform **Environment Variables** locally to hide sensitive credentials
+
+`$ export TF_VAR_db_username="(YOUR_DB_USERNAME)"`
+
+* Experiment with **Terraform Syntax, ARGS and Functions** by entering the **Terraform Console**: (**READ ONLY**)
+
+`$ terraform console .... <---- I am read-only`
+
+* Terraform `File Layout` provides a true, recommended method of isolation
+  - Place configuration files in seperate file directories
+  - Configure unique remote backend methods for control of RBAC
+
+* When you run Terraform, it simply looks for files in the current directory with the .tf extension
+  - Splitting components into separate folders prevents you from accidentally blowing up your entire infrastructure in one command, but it also prevents you from creating your entire infrastructure in one command.
+  - I.E, when working multiple folders; a `terraform plan`/ `terraform apply` is required in each folder
+  - A workaround for this is to use [**Terragrunt**](https://terragrunt.gruntwork.io/) using the `run-all-command` for **clean**, `DRY` code.
+
+### Terraform Modules
+
+* `**Terraform Modules** allow for clean, portable and easy re-use of IaC Terraform code:
+  * Think of Terraform `Modules` as reusable functions with generic programming languages for the purpose of reusing blocks of code and put that code anywhere
+  * Terraform Modules, similarly allow you to specify blocks of code within a Module and re-use that across multiple environments without having to actually copy and paste the IaC code
+  * Modules are the key ingredient to writing reusable, maintainable, and testable Terraform code as well as sharing this with other teams (`reusable modules`)
+    >* Terraform modules are simply any set of Terraform configuration files in a folder that removes erroneous configuration drift, duplication and provides ease for management
+    >* Running `terraform apply` on a module refers to it as the `root` module
+    >* **Providers should only be configured in Terraform root modules, not reusable modules**
+    >* **Adding Terraform Providers requires another** `terraform init`, prior to `terraform plan / terraform apply` each time to take effect
+    >1) `NAME` is a logical name for reference within configuration
+    >2) `SOURCE` is the file dir/path to the module (Terraform supports other types of module sources, such as Git URLs, Mercurial URLs, and arbitrary HTTP URLs.)
+    >3) `CONFIG` is the arguments/configuration items, specific to the module
+  * Terraform Module `templatefile` function is that the filepath you use must be **relative**, and not **absolute**.. or use a **path reference** (`path.<TYPE> (module/root/cwd)`) (By default, Terraform interprets the path relative to the current working directory.)
+  * When creating a module, you should always prefer using separate resources, (can be defined anywhere) as using both separate resources combined with inline blocks (can only be added within a module which creates that resource) will present erroneous configuration errors and configuration overlap
+
+```
+provider "aws" {
+  region = "us-east-2"
+}
+
+module "webserver_cluster" {
+  source = "../../../modules/services/webserver-cluster"
+# VARIABLE EXAMPLES BELOW ..
+  cluster_name           = "webservers-stage"
+  db_remote_state_bucket = "(YOUR_BUCKET_NAME)"
+  db_remote_state_key    = "stage/data-stores/mysql/terraform.tfstate"
+}
+```
+
+* In a GPL, to make a function configurable, you can add input parameter(s) to that function
+* This has the same use-case for Terraform modules which avoid hard-coded naming convention errors when using different cloud provider accounts or environments, by adding a `variables.tf` file within the Terraform Module folder
+* Within the `main.tf` Terraform module configuration, the variable is referenced using name = "${var.x_y}-z"
+
+```
+variable "cluster_name" {
+  description = "The name to use for all the cluster resources"
+  type        = string
+}
+```
+
+* Terraform `LOCAL Modules` values allow you to assign a name to any Terraform expression and to use that name throughout the module. 
+* The names (`local.<NAME>) are only visible within the module and cannot be overriden from outside the module
+
+locals {
+  http_port    = 80
+}
+
+* `MODULE OUTPUTS` == `module.<MODULE_NAME>.<OUTPUT_NAME>` to access module output variables
+
+### Terraform Module Versions
+
+* The easiest way to create a versioned module is to put the code for the module in a separate Git repository and to set the source parameter to that repository’s URL.
+* Recommended to use Git Tag's for logical references for naming convention of Terraform Module versions
+
+....
+
+📖 EO `Terraform: Up and Running, 3rd Edition` Book Notes
+	
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
 🧪 `lab`
 
 # [Apply Terraform Configuration](https://developer.hashicorp.com/terraform/tutorials/cli/apply?utm_source=WEBSITE&utm_medium=WEB_IO&utm_offer=ARTICLE_PAGE&utm_content=DOCS)
