@@ -936,16 +936,88 @@ variable "image_id" {
 -   [`nullable`](https://developer.hashicorp.com/terraform/language/values/variables#disallowing-null-input-values) - Specify if the variable can be `null` within the module **and overrides the default value**
 	- `nullable = true` OR `nullable=true`
 
+## **Output Variables:** (AKA *Function Return Values* or `outputs`)
+* Output values make information about your infrastructure available on the command line, and can expose information for other Terraform configurations to use. I.E:
+	1) A child module can use outputs to expose a subset of its resource attributes to a parent module
+	* E.G, Child module named `web_server=instance_ip_addr`, you can access that value as `module.web_server.instance_ip_addr` via the Parent module 
+	2) A root module can use outputs to print certain values in the CLI output after running `terraform apply`
+	3) When using remote state, root module outputs can be accessed by other configurations via a **terraform remote state data source**
+* Output values are similar to return values in programming languages.
+* **Outputs are only rendered when Terraform applies your plan, ** not`terraform plan`**.
 
+```
+output "instance_ip_addr" {
+  value = aws_instance.server.private_ip
+}
+# The expression refers to the private_ip attribute exposed by an aws_instance resource defined elsewhere in this module (not shown)
+```
 
-## **Output Variables:** (AKA *Function Return Values*)
-* 
+* In a root module, this name is displayed to the user; in a child module, it can be used to access the output's value.
 
+* **Custom Condition Checks**
+	* Capturing assumptions, documentation and ease of understanding as well as diagnosing issues
 
-## **Local Values:** (AKA *Function's temporary local variables'*)
-* 
+```
+output "api_base_url" {
+  value = "https://${aws_instance.example.private_dns}:8433/"
 
+# This example precondition checks whether the EC2 instance has an encrypted volume {
+    condition     = data.aws_ebs_volume.example.encrypted
+    error_message = "The server's root volume is not encrypted."
+  }
+}
+```
 
+* **Output Arguments**
+	* `description` = "Describe the purpose of each value"
+	* `sensitive = true|false` = "Redact/mark values in `terraform plan|apply`"
+	* `dependes_on = X` = "Parent module accesses an output value exported by one of its child modules, specify dependencies of that output value allows Terraform to correctly determine the dependencies defined in different modules. **Should be used as a LAST RESORT**"
+
+```
+output "instance_ip_addr" {
+  value       = aws_instance.server.private_ip
+  description = "The private IP address of the main server instance."
+
+  depends_on = [
+    # Security group rule must be created before this IP address could
+    # actually be used, otherwise the services will be unreachable.
+    aws_security_group_rule.local_access,
+  ]
+}
+```
+
+## **Local Values:** (AKA *Function's temporary local variables'* or `locals`)
+* A local value assigns a name to an expression, so you can use the name multiple times within a module instead of repeating the expression.
+* Since you can reference the local multiple times, you reduce duplication in your code
+* Local values can be helpful to avoid repeating the same values or expressions multiple times in a configuration, but if overused they can also make a configuration hard to read by future maintainers by hiding the actual values used.
+	* Local values behave like function definitions in traditional programming languages
+	* Terraform's locals do not change values during our between Terraform runs `plan|apply|destroy`
+	* Unlike variable values, local values can use dynamic expressions and resource arguments.
+	* A local value can only be accessed in expressions within the module where it was declared.
+
+```
+locals {
+  name_suffix = "${var.resource_tags["project"]}-${var.resource_tags["environment"]}"
+  service_name = "forum"
+  owner        = "Community Team"
+  # Ids for multiple sets of EC2 instances, merged together
+  instance_ids = concat(aws_instance.blue.*.id, aws_instance.green.*.id)
+  # Common tags to be assigned to all resources
+  common_tags = {
+    Service = local.service_name
+    Owner   = local.owner
+}
+
+resource "aws_instance" "example" {
+  # ...
+
+  tags = local.common_tags
+}
+```
+
+[Customize Terraform Configuration with Variables](https://developer.hashicorp.com/terraform/tutorials/configuration-language/variables)  
+  
+[Output Data from Terraform](https://developer.hashicorp.com/terraform/tutorials/configuration-language/outputs)
 
 <br>
 </details>
@@ -954,19 +1026,121 @@ variable "image_id" {
 <summary><b>Describe secure secret injection best practice</b></summary>
 <br>
 
-```
-code
-```
+* Hashicorp Vault as a Terraform provider allows read from, write to and configure Vault
+* Remember to use `sensitive=true` to redact secrets being persisted in Terraforms `terraform.tfstate` and `plan` files
+* The vault provider requests a short-lived TTL token (`max_lease_ttl_seconds`) (20 mins = default) which means Vault will revoke any issued credentials after that time but is unable to retract any static secrets such as those stored in Vault's `generic` secret backend
+
+* The Vault provider supports the following Vault authentication engines to authenticate to Vault:
+	* `Userpass` = Username and Password `auth_login_userpass` (HTTP API)
+	* `AWS` = AWS Authentication `auth_login_aws`
+	* `TLS Certificate` = TLS Certificate authentication `auth_login_cert`
+	* `GCP` = Google Cloud Auth Engine `auth_login_gcp`
+	* `Kerberos` = Kerberos Auth Engine `auth_login_kerberos`
+	* `Radius` = Radius Auth Engine `auth_login_radius`
+	* `OCI` = Oracle Cloud Infrastructure Auth Engine `auth_login_oci`
+	* `OIDC` = OIDC/JWT Auth Method (requires web browser on host machine) `auth_login_oidc`
+	* `JWT` = JWT Auth Engine `auth_login_jwt`
+	* `Azure` = Azure Auth Engine `auth_login_azure`
+	* `Generic` = Path-based authenticate `auth_login`
 
 <br>
 </details>
+
+<details>
+<summary><b>Understand the use of collection and structural types	</b></summary>
+<br>
+
+* A _complex_ type is a type that groups multiple values into a single value:
+	* `Collection Types` = Grouping similar values
+		* Type of a value is called its element type
+		* All elements of a collection must always be of the same type
+		* `list(...)|list(any)` = Sequence of values identified by consecutive whole numbers >=0
+		* `map(...)map(any)` = Collection of values where each is identified by a string label
+			* Maps can be made with braces ({}) and colons (:) or equals signs (=): { "foo": "bar", "bar": "baz" } OR { foo = "bar", bar = "baz" }.
+			* A newline between key/value pairs is sufficient in multi-line maps.
+		* `set(...)` = Collection of unique values that do not have any secondary identifiers or ordering
+	* `Structural Types` = Grouping dissimilar values
+		* Structural types require a schema as an argument to specify which types are allowed for which elements
+			* `object(...)` = Collection of named attributes that each have their own type
+				* Schema = `{ <KEY> = <TYPE>, <KEY> = <TYPE>, ... }`
+			* `tuple(...)` = A sequence of elements identified by consecutive whole numbers >=0, where each element has its own type
+				* Schema = `[<TYPE>, <TYPE>, ...]`
+<br>
+</details>
+
 <details>
 <summary><b>Create and differentiate resource and data configuration</b></summary>
 <br>
 
+* **Resources:** (AKA **Managed Resources**)
+	* Each Resource block within Terraform Language describes one or more infrastructure obects. Each Resource is associated with a single resource type which determines the kind of infrastructure object it manages and arguments the resource supports.
+		* A resource block declares that you want a particular infrastructure object to exist with the given settings.
+		* The infrastructure object represented by the `resource` block is stored within `terraform.tfstate` which allows it to be updated and destroyed in response to future changes.
+		* For `resource` blocks which already exist within the `terraform.tfstate`, Terraform compares the actual configuration of the object with the arguments given in the configuration to identify if an update is needed.
+		* `terraform apply`'ing a configuration will:
+			* `create` resources that exist in the configuration but not associated with real world infrastructure state
+			* `destroy` resources that exist in the state but no longer in the configuration
+			* `update` in-place resources who's arguments have changed
+			* `destroy` & `update` resources who's arguments have changed but which cannot be updated in-place due to remote API (`provider`) limitations
+	* Each Resource Type is implemented by a provider (Terraform plugin for IaC configuration and management)
+		* A Terraform module must specify which providers it requires to manager resources as well as authenticate to that provider
+		* Terraform can sometimes automatically determine which provider to use based on a resource type's name
+	* `resource {` blocks document the syntax to declare resources
+		* The resource type and name together serve as an identifier for a given resource and so must be unique within a module.
+		* **Resource names must start with a letter or underscore, and may contain only letters, digits, underscores, and dashes.**
+	* **Resource Behavior** defines how Terraform handles resource declarations when applying a configuration
+		* You can use `precondition` and `postcondition` blocks to specify assumptions and guarantees about how the resource operates.
+	* Meta-arguments can be used with every resource type
+		* `depends_on` = Specifying hidden dependencies
+		* `count` = Creating multiple resource instances
+		* `for_each` = Create multiple instances according to a `map` or set of strings
+		* `provider` = Selecting a non-default provider configuration
+		* `lifecycle` = Lifecycle customizations
+		* `provisioner` = Taking extra actions after resource creation
+	* Provisioners documents configuring post-creation actions for a resource using `provisioner` and `connection` blocks
+		* Provisioners are non-declarative and thus potentially unpredictable **LAST RESORT**
+
 ```
-code
+resource "aws_instance" "web" {
+  ami           = "ami-a1b2c3d4"
+  instance_type = "t2.micro"
+}
 ```
+
+* **Accessing Resource Attributes**:
+	* Resource Attributes are achieved through Terraform modules accessing `expressions` which is information about resources to help configure other resources.
+	* Use the `<RESOURCE TYPE>.<NAME>.<ATTRIBUTE>` syntax to reference a resource attribute in an expression.Use the `<RESOURCE TYPE>.<NAME>.<ATTRIBUTE>` syntax to reference a resource attribute in an expression.
+		* Simple example is an instance ID number
+
+* **Resource Dependencies**:
+	* Most resources in a configuration don't have any particular relationship, and Terraform can make changes to several unrelated resources in parallel.
+	* Most resource `dependencies` are handled automatically.
+	* Terraform analyses any `expressions` within a `resource` block to find references to other objects, and treats those references as implicit ordering requirements when creating, updating, or destroying resources.
+	* For dependencies that cannot be recognized implicitly in configuration, you can use `depends_on` meta argument to explicitly define a dependency as well as `replace_triggered_by` to add dependencies between otherwise independent resources which forces Terraform to replace the parent resource when there is a change to a referenced resource or resource attribute
+
+* **Local-Only Resources**:
+	* Sometimes referred to as glue to help connect together other resources, examples:
+		* Generating private keys
+		* Issuing self-signed TLS certificates
+		* Generating random ID's
+	* Obviously Local Resources only exist in `terraform.tfstate` and not real-world infrastructure
+
+### * **Managed Resources vs Data Resources**:
+	* `Managed Resources` cause Terraform to create, update, and delete infrastructure objects
+	* `Data Resources` cause Terraform only to _read_ objects.
+
+* **Data Sources:**:
+	* Data Source is accessed via a special kind of resource known as a data resource, must be unique and locally inta-Module relevant. The Data Source are also `provider`-relevant.
+	* Data Source `meta-arguments` are not provider-relevant and generic across all data sources.
+	* Each data resource is associated with a single data source, which determines the kind of object (or objects) it reads and what query constraint arguments are available.
+	* Declated using a `data "aws_ami" "example" {` block, prompts Terraform to read from a given data source ("aws_ami") and export the result under the local given name ("example")
+	* The name is used to refer to this resource from elsewhere in the same Terraform module, but has no significance outside of the scope of a module.
+
+* Terraform reads data resources during the `plan`ning phase when possible and defers reading resources until the apply phase to preserve the order of operations
+* Same as Managed Resources, Terraform also supports `Local-only Data Sources` which are Terraform-local, only exist temporarily during a Terraform operation and are re-calculated each time a new plan is created:
+	* Rendering Templates
+	* Reading Local Files
+	* Rendering AWS IAM Policies
 
 <br>
 </details>
@@ -975,9 +1149,51 @@ code
 <summary><b>Use resource addressing and resource parameters to connect resources together</b></summary>
 <br>
 
+* A **resource address** (`[module path][resource spec]`) is a string that identifies zero or more resource instances in your overall configuration.
+
+* A **Resource Spec** addresses a specific resource instance in the selected module = `resource_type.resource_name[instance index]`:
+	* `resource type` - Type of resource being addressed
+	* `resource name` - User-defined name of the resource
+	* `[instance index]` - (**Optional**) index to select an instance from a resource that has multiple instances
+
+* A **Module Path** (`module.module_name[module index]`) addresses a module within the tree of modules 
+	* (A Terraform module is a set of Terraform configuration files in a single directory.)
+	* `module` - indicating a child module (non-root). Multiple module keywords in a path indicate nesting
+	* `module.name` - User-defined name of the module
+	* `[module index]` - (**Optional**) index to select an instance from a module call that has multiple instances
+* To address all resources of a **particular** module instance, include the module index in the address, such as `module.foo[0]`
+* An example of the module keyword delineating between two modules that have multiple instances:
+	* `module.foo[0].module.bar["a"]`
+
+* **Index values for Modules and Resources:**
+	* `N` = Where `N` is a `0`-based numerical index into a resource with multiple instances specified by the `count` meta-argument
+		* Omitting an index when addressing a resource where `count > 1` means that the address references all instances
+	* `["INDEX]"` = Where `INDEX` is a alphanumerical key index into a resource with multiple instances specified by the `for_each` meta-argument
+	* Example Terraform configuration:
+
 ```
-code
+resource "aws_instance" "web" {
+  # ...
+  count = 4
+}
 ```
+
+* Equals:
+	* Address = `aws_instance.web[3]`
+	* Last instance in the config = `aws_instance.web`
+
+```
+resource "aws_instance" "web" {
+  # ...
+  count = 4
+}
+```
+
+* Equals:
+	* Address (**example** instance only) = `aws_instance.web["example"]`
+
+* **References to Named Values:**
+	* 
 
 <br>
 </details>
@@ -1219,6 +1435,8 @@ cluster_name           = "webservers-stage"
 }
 ```
 
+* PROGRESS - Page 246
+	
 ....
 
 📖 EO `Terraform: Up and Running, 3rd Edition` Book Notes
