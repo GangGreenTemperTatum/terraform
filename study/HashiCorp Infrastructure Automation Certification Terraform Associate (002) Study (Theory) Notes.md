@@ -96,6 +96,7 @@ $ terraform init .. prompts Terraform to install the provider with a registry, a
 
 ### Terraform Cloud ☁️ vs Terraform Enterprise
 
+* Terraform Enterprise is offered as a private installation, whereas Terraform Cloud is available as a hosted service at [https://app.terraform.io](https://app.terraform.io/) (SaaS)
 * All the features of Terraform Cloud ☁️ and Terraform Enterprise are the same except additional features in Terraform Enterprise are audit logging, SAML single sign-on, private instance with no limits etc. SAML Single sign on- Terraform Enterprise supports SAML 2.0, And it works with a variety of identity providers.
 
 > * [Terraform Cloud](https://developer.hashicorp.com/Terraform/intro/Terraform-editions#Terraform-cloud) is HashiCorp's Terraform SaaS.
@@ -1192,8 +1193,58 @@ resource "aws_instance" "web" {
 * Equals:
 	* Address (**example** instance only) = `aws_instance.web["example"]`
 
+
 * **References to Named Values:**
-	* 
+	* Each `reference` has an associated value
+		* An expression in a resource argument that refers to another managed resource creates an implicit dependency between the two resources.
+		* Terraform analyzes these expressions to automatically infer dependencies between objects.
+	* Types of Named Values include:
+		-   Resources
+			- `<RESOURCE TYPE>.<NAME>` (Managed resource of given type and name, either an object; list of objects or *map* of objects)
+		-   Input variables
+			- `var.<NAME>` (AKA Variables, example of an EC2 Resource's ID)
+		-   Local values
+			- `local.<NAME>` (Value of the local value, name to an expression)
+		-   Child module outputs
+			- `module.<MODULE NAME>` (Value results of a `module` block, a module is a container for multiple resources that are used together.)
+			- To access one of the module's output values, use `module.<MODULE NAME>.<OUTPUT NAME>`
+		-   Data sources
+			- `data.<DATA TYPE>.<NAME>` (An object representing a data resource of the given data source type and name which are defined using `data` blocks and allow Terraform to use information outside of it's local config, or modified by functions)
+		-   Filesystem and workspace info
+			- `path.module` = Filesystem path of the module where the expression is placed
+			- `path.root` = Filesystem path of the root module of the configuration
+				- Every Terraform configuration has at least one module, known as its _root module_, which consists of the resources defined in the `.tf` files in the main working directory.
+			- `path.cwd` = Filesystem path of the original working dir (absolute path) where Terraform was ran
+			- `terraform.workspace` is the name of the currently selected workspace
+		-   Block-local values
+			- Within bodies of `blocks`, or in some specific contexts, there are other named values available beyond the global values listed above. These are local names (AKA **Temp Variables**) and most common are:
+				- `count.index` = `count` meta-argument
+				- `each.key` / `each.value` = `for_each` meta-argument
+				- `self` = `provisioned` or `connection` blocks
+
+Example Terraform `.tf` configuration:
+
+```
+resource "aws_instance" "example" {
+  ami           = "ami-abc123"
+  instance_type = "t2.micro"
+
+  ebs_block_device {
+    device_name = "sda2"
+    volume_size = 16
+  }
+  ebs_block_device {
+    device_name = "sda3"
+    volume_size = 20
+  }
+}
+```
+
+* AMI argument = `aws_instance.example.ami`
+* ID attribute argument = `aws_instance.example.id`
+
+* When marking a Resource as `sensitive`, Terraform will show a placeholder of `(sensitive value)` within `plan` and `apply` actions
+* Terraform will still record sensitive values in the `terraform.tfstate` and thus recommended to include in a `.gitignore`
 
 <br>
 </details>
@@ -1202,9 +1253,45 @@ resource "aws_instance" "web" {
 <summary><b>Use Terraform built-in functions to write configuration</b></summary>
 <br>
 
+* Terraform language includes a number of built-in functions that you can call from within expressions to transform and combine values.
+	* Terraform language does not support user-defined functions, and so only the functions built in to the language are available for use.
+* Generally expressed as function name, separated by comma-specific arguments in paranthesis:
+
+`max(5, 12, 9)`
+
+* Experiment with Terraform Functions using the read-only `terraform console`
+
+* Example of a `terraform plan` showing how to **Perform Dynamic Operations with Functions** (in this case, the `lookup` function):
+
 ```
-code
+##...
+resource "aws_instance" "web" {
+- ami                         = data.aws_ami.ubuntu.id
++ ami                         = lookup(var.aws_amis, var.aws_region)
 ```
+
+* Example of a `main.tf` Terraform configuration showing how to **Create Dynamic Expressions** to compute or generate values for your infrastructure configuration using the **conditional expression** (boolean, **true** or **fale**)
+
+```
+resource "random_id" "id" {
+  byte_length = 8
+}
+
+locals {
+  name  = (var.name != "" ? var.name : random_id.id.hex)
+  owner = var.team
+  common_tags = {
+    Owner = local.owner
+    Name  = local.name
+  }
+}
+```
+
+* The syntax of a conditional expression first defines the condition, then the outcomes for true and false evaluations. In this example, if `var.name` is not empty (`!= ""`), `local.name` is set to the `var.name` value; otherwise, the name is the `random_id`.
+
+| **Condition** | **?** | **true value** | **:** | **false value** |
+| ------ | ------ | ------ | ------ | ------ |
+| If the `name` variable is NOT empty | then  | Assign the `var.name` value to the local value | else | Assign `random_id.id.hex` value to the local value |
 
 <br>
 </details>
@@ -1213,9 +1300,32 @@ code
 <summary><b>Configure resource using a dynamic block</b></summary>
 <br>
 
+* **`Dynamic` Blocks:**:
+	* Within top-level block constructs like resources, expressions can usually be used only when assigning a value to an argument using the `name = expression` form.
+	* The `dynamic` block type is supported inside `resource`, `data`, `provider`, and `provisioner` blocks in aid to **dynamically construct repeatable nested blocks**:
+		* Dynamic blocks act much like a `for` expression in a GPL but produces nested blocks instead of a complex types value.
+		* It iterates over a given complex calue, and generates a nested block for each element of that complex value.
+		* It is _not_ possible to generate meta-argument blocks such as `lifecycle` and `provisioner` blocks, since Terraform must process these before it is safe to evaluate expressions.
+
 ```
-code
+resource "aws_elastic_beanstalk_environment" "tfenvtest" {
+  name                = "tf-test-name"
+  application         = "${aws_elastic_beanstalk_application.tftest.name}"
+  solution_stack_name = "64bit Amazon Linux 2018.03 v2.11.4 running Go 1.12.6"
+
+  dynamic "setting" {
+    for_each = var.settings
+    content {
+      namespace = setting.value["namespace"]
+      name = setting.value["name"]
+      value = setting.value["value"]
+    }
+  }
+}
 ```
+
+* **Overuse of `dynamic` blocks can make configuration hard to read and maintain**
+* **Always write nested blocks out literally where possible.**
 
 <br>
 </details>
@@ -1224,9 +1334,40 @@ code
 <summary><b>Describe built-in dependency management (order of execution based)</b></summary>
 <br>
 
-```
-code
-```
+* Terraform reads data resources during the `plan`ning phase when possible and defers reading resources until the apply phase to preserve the order of operations
+* Terraform builds a **dependency graph** from the Terraform configurations, and walks this graph to generate plans, refresh state, and more.
+	* `terraform graph`
+
+* **Graph Nodes:**
+	* `Resource` **Node** = A single Resource (Infrastructure component)
+	* `Provider Configuration` **Node** = Time to fully configure a provider upon `provider` configuration block given to the provider
+	* `Resource Meta-`**Node** = A group of resources (Infrastructure components) - **ONLY present if resources have `count>1`**
+
+* **Building the Graph**: (`Order of precedence / Order of Operations`)
+1.  Resources nodes are added based on the configuration. 
+	1. Meta-data is attached to resource node if a diff (plan) or `terraform.tfstate` is present
+2.  Resources are mapped to provisioners if defined after all resource nodes are created so resources with the same provisioner type can share the provisioner implementation.
+3.  Explicit dependencies from the `depends_on` meta-parameter are used to create edges between resources.
+4.  If `terraform.tfstate` is present, any "orphan" resources are added to the graph. 
+	1. Orphan resources are any resources that are no longer present in the configuration but are present in the state file. 
+	2. Orphans never have any configuration associated with them, since the state file does not store configuration.
+5.  Resources are mapped to providers and provider configuration nodes are created
+6.  Interpolations are parsed in resource and provider configurations to determine dependencies. 
+	1. References to resource attributes are turned into dependencies from the resource with the interpolation to the resource being referenced.
+	2. HCL uses a simple syntax for string interpolation within quoted ("") strings and heredoc strings, where the values enclosed in ${} characters are evaluated at runtime as an expression and replaced with their corresponding generated values.
+8.  Create a root node which points to all resources and acts as a single root to the dependency graph. 
+	1. When traversing the graph, the root node is ignored.
+9.  If a diff is present, traverse all resource nodes and find resources that are being destroyed.
+	1. These resource nodes are split into two: 
+		- one node that destroys the resource and another that creates the resource (if it is being recreated). 
+			- `terraform destroy` order is often different from the `create` order, and so they can't be represented by a single graph node.
+10.  Validate the graph has no cycles and has a single root.
+
+* **Walking the Graph**: (`A standard depth-first traversal is done`)
+	* A node is walked as soon as all of its dependencies are walked
+	* By default, up to **10** nodes in the graph will be processed concurrently to prevent overwhelming of the host running Terraform
+		* `terraform <plan|apply|destroy> -parallelism`
+	* Terraform does not perform **parallelism** controls for API clients as most providers handle API rate limiting gracefully at a low-level
 
 <br>
 </details>
@@ -1239,9 +1380,39 @@ code
 <summary><b>Describe the benefits of Sentinel, registry, and workspaces</b></summary>
 <br>
 
-```
-code
-```
+* **Sentinel**:
+	* Sentinel policies are defined using the **sentinel policy language** (configuration files = `.sentinel` file ext, mock files = `sentinel.hcl` file ext) and added to **policy sets** so that Terraform Cloud can enforce on a workspace
+	* Sentinel policies are available in the Terraform Cloud Team and Governance tier.
+	* Sentinel tests requirements against imported data, resulting in a `Pass` or `Fail` (`sentinel apply <filename>.sentinel`)
+	* **Sentinel policies can be created to manage how members of an organization can use modules from Terraform Private Registries**
+
+* **Terraform Registry**:
+	* Terraform has a [public Terraform Registry]https://developer.hashicorp.com/terraform/registry) which allows support for versioning and a searchable list of available providers and modules (ready-made templates)
+	* Terraform Private Registries are available with **Terraform Cloud and Enterprise**
+		* Terraform Cloud Private Registry capabilities automatically synchronizing Modules and Providers from Terraform Public registry
+		* Private Providers and private Modules are hosted on the private registry and limited to members of that organization
+
+* **Terraform Workspaces**:
+	* Terraform workspaces are compatible with **Terraform Cloud** and **Terraform Enterprise** and differ from locally ran Terraform which stores configuration, `terraform.tfstate` and variables in a persistent working directory (save on disk)
+		* **Terraform Cloud workspaces are required.**
+	* Terraform Cloud manages infrastructure collections with _workspaces_ instead of directories. A workspace contains everything Terraform needs to manage a given collection of infrastructure, and separate workspaces function like completely separate working directories.
+	* Terraform Cloud enhances workspaces by storing Credentials and Secrets as sensitive variables, instead of shell environments and prompts and also stores Terraform in linked version control repository, or periodically uploaded via API/CLI including state versions (for rollback, history), run history (auditing) as well as RBAC authentication to workspaces
+	* Unless using `git`, a local Terraform operation will not include any version control
+
+### Terraform Cloud ☁️ vs Terraform Enterprise
+
+* Terraform Enterprise is offered as a private installation, whereas Terraform Cloud is available as a hosted service at [https://app.terraform.io](https://app.terraform.io/) (SaaS)
+* All the features of Terraform Cloud ☁️ and Terraform Enterprise are the same except additional features in Terraform Enterprise are audit logging, SAML single sign-on, private instance with no limits etc. SAML Single sign on- Terraform Enterprise supports SAML 2.0, And it works with a variety of identity providers.
+
+* **Terraform Runs**:
+
+For workspaces with remote operations enabled (the default), Terraform Cloud performs Terraform runs on its own disposable virtual machines, using that workspace's configuration, variables, and state.
+
+* **Terraform Projects**:
+	* Used to manage **Terraform Workspaces**
+
+**Health Assessments are available in the [Terraform Cloud Business tier](https://www.hashicorp.com/products/terraform/pricing), and continuous validation is in beta.**
+**Health Assessments are used to validate workspace Terraform operations to real-world infrastructure (`declarative behavior` and to eradicate configuration drift etc.
 
 <br>
 </details>
