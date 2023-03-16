@@ -638,7 +638,7 @@ hashicorp/consul/aws <---- Example verified module
 * `-` destroy
 * `-/+` replace (destroy and then create, or vice-versa if create-before-destroy is used)
 * `~` update in-place
-* `<=` read
+* `<=` read <--- Applies only to data resources
 
 * Terraform is written as code within `.tf` file extensions
 * Terraform code from the current working dir, is initiated with `$ terraform init`..After you initialize, Terraform creates a `.terraform/` directory locally. 
