@@ -58,11 +58,55 @@
 - Terraform can manage low-level components like compute, storage, and networking resources, as well as high-level components like DNS entries and SaaS features.
 - Terraform creates and manages resources on cloud platforms and other services through their application programming interfaces (APIs).
 
-Provider example = AWS, GCP, Azure
+Provider example = AWS, GCP, Azure.. The syntax for a Provider in Terraform is `terraform-provider-<NAME>_vX.Y.Z`
 
 $ terraform init .. prompts Terraform to install the provider with a registry, and alternatively can be done with a `provider` block located in the local plugins directory
 (if custom, need to download and compile the binary to build from source and requires GoLang)
 ```
+
+* When initializing Terraform (`terraform init`), the plugins for the providers listed in the Terraform configuration are downloaded, installed and loaded. The versions for the providers can be specified two-fold:
+	
+```
+1. With required_providers blocks under terraform block
+terraform {
+  required_providers {
+    aws = "~> 1.0"
+  }
+}
+	
+2. Provider version constraints can also be specified using a version argument within a provider block
+provider {
+  version= "1.0"
+  alias  = "west" <--- Using the `alias` command allows you to configure multiple providers (I.E, multiple AWS regions)	
+  region = "us-west-2"
+}
+```
+
+* **Terraform Version Constraints**
+
+- `= (or no operator)`: Allows only one exact version number. Cannot be combined with other conditions.
+- `!=`: Excludes an exact version number.
+- `>, >=, <, <=`: Comparisons against a specified version, allowing versions for which the comparison is true. "Greater-than" requests newer versions, and "less-than" requests older versions.
+- `**~>**`(tilde): Allows only the rightmost version component to increment. For example, to allow new patch releases within a specific minor release, use the full version number: ~> 1.0.4 will allow installation of 1.0.5 and 1.0.10 but not 1.1.0. This is usually called the pessimistic constraint operator.
+	
+* **Provider Plugins and Cache**
+
+* Terraform optionally allows the use of a local directory as a shared plugin cache, which then allows each distinct plugin binary to be downloaded only once. This is instead of having multiple large provider files filling up a filesystem potentially or exhausting resources.
+* To enable the plugin cache, use the plugin_cache_dir setting in the CLI configuration file. (`.terraformrc or terraform.rc`)
+
+`plugin_cache_dir = "$HOME/.terraform.d/plugin-cache"`
+
+* Alternatively, the `TF_PLUGIN_CACHE_DIR` environment variable can be used to enable caching or to override an existing cache directory within a particular shell session
+	
+* The plugins (no cache) are stored:
+
+```
+Windows                     %APPDATA%\terraform.d\plugins
+All other systems           ~/.terraform.d/plugins
+```
+	
+* Upgrading the Provider plugins are the responsibility of the Terraform admin and are completed via `terraform init --upgrade`
+* Third-party plugins should be manually installed (meaning they are not built by HashiCorp, nor supported)
 
 * After you initialize, Terraform creates a `.terraform/` directory locally.
 	* **This directory contains the most recent backend configuration, including any authentication parameters you provided to the Terraform CLI. Do not check this directory into Git, as it may contain sensitive credentials for your remote backend.**
@@ -430,14 +474,13 @@ terraform apply -replace="aws_instance.example[0]"
 
 * Using vebose logging and debugging is designed for potential bugs found in Terraform actions and behaviors
 * Setting the `TF_LOG` environment variable to any value will cause detailed logs to appear on `stderr`:
-	* `TRACE`
-	* `DEBUG`
+	* `TRACE` <--- Most Verbose | Setting the `TF_LOG` environment variable to `JSON` outputs logs at the `TRACE` level or higher
+	* `DEBUG` <--- Default logging level
 	* `INFO`
 	* `WARN`
 	* `ERROR
-* Setting the `TF_LOG` environment variable to `JSON` outputs logs at the `TRACE` level or higher
 * To persist logged output you can set `TF_LOG_PATH` in order to force the log to always be appended to a specific file when logging is enabled. 
-* When `TF_LOG_PATH` is set, `TF_LOG` must be set in order for any logging to be enabled.
+* **When `TF_LOG_PATH` is set, `TF_LOG` must be set in order for any logging to be enabled.**
 
 <br>
 </details>
@@ -588,6 +631,14 @@ hashicorp/consul/aws <---- Example verified module
 | **Write:** | You define resources, which may be across multiple cloud providers and services. Configuration components called Modules define configutable collections of infrastructure. |
 | **Plan: (Topology)** | Terraform creates an execution plan describing the infrastructure it will create, update, or destroy based on the existing infrastructure and your configuration. <br> `$ Terraform refresh` .. Queries Registry provider's API's for up-to-date topology of infrastructure. <br> `$ Terraform plan` .. Reconcile what is running with desired configuration, compares the monolithic core against the state file |
 | **Apply:** | On approval, Terraform performs the proposed operations in the correct order, respecting any resource dependencies. Following this, Terraform updates the "State" file. Resource dependencies are identified via Terraform's built Resource Graphs and creates or modifies non-dependent resources in parallel. <br> `$ Terraform apply` Makes the plan a destination configuration and state. <br> `$ Terraform destroy` .. Destroys elements via a plan at the end of a lifecycle to cleanup and decom<br> |
+
+* **Terraform Plan Symbol Definitions**
+	
+* `+` create
+* `-` destroy
+* `-/+` replace (destroy and then create, or vice-versa if create-before-destroy is used)
+* `~` update in-place
+* `<=` read
 
 * Terraform is written as code within `.tf` file extensions
 * Terraform code from the current working dir, is initiated with `$ terraform init`..After you initialize, Terraform creates a `.terraform/` directory locally. 
