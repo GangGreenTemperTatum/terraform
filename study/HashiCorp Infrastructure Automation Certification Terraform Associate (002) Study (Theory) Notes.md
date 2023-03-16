@@ -81,6 +81,8 @@ provider {
   region = "us-west-2"
 }
 ```
+		       
+* Note the syntax in the Terraform `.tf` configuration file is **`required_provider(s)**
 
 * **Terraform Version Constraints**
 
@@ -125,6 +127,10 @@ All other systems           ~/.terraform.d/plugins
 
 ### **Terraform Workflow**
 
+1) Write
+2) Plan
+3) Apply
+	
 | **Terraform Workflow State** | **Definition** |
 | ------ | ------ |
 | **Write:** | You define resources, which may be across multiple cloud providers and services. Configuration components called Modules define configutable collections of infrastructure. |
@@ -346,6 +352,8 @@ version control system if they represent changes you intended to make.
 
 <br>
 
+* Supported `remote-exec` types are `ssh` and `winrm`.
+	
 ### Provisioners:
 
 * Provisioners are a last resort since there are always certain behaviors that cannot be directly represented in Terraform's declarative model.
@@ -398,7 +406,8 @@ resource "aws_instance" "web" {
 	* Available [Terraform language style conventions](https://developer.hashicorp.com/terraform/language/syntax/style):
 * Ensure to stay consistent with formatting style imposed by the `terraform fmt` command. Terraform will also produce files that confirm to the style imposed by this command.
 * The `terraform fmt` command is also recommended during Terraform upgrades to ensure consistency and prevent errors during upgrade that may mangle the syntax and style applied.
-    
+* Running `terraform fmt` rewrites Terraform configuration files to a canonical format and style and is recommended following Terraform upgrades (`tfenv -v | terraform version`), or declared in the `terraform { .. version.. }` block
+	
 <br>
 </details>
 
@@ -406,9 +415,11 @@ resource "aws_instance" "web" {
 <summary><b>Given a scenario: choose when to use `Terraform taint` to taint Terraform resources</b></summary>
 <br>
 
-########## **Deprecated** ########## (recommend `-replace` option _>=v0.15.2_)
+########## **Deprecated** ########## (recommend `terraform apply -replace` option _>=v0.15.2_)
 * `terraform taint` command informs Terraform that a particular object has become degraded or damaged and marks it as such within the Terraform state file to propose a replace in the next upcoming Terraform plan.
 * Example of using Terraform (`-replace`) option to replace object with no configuration changes:
+
+* If you know that an object is damaged, or if you want to force Terraform to replace it for any other reason, you can override Terraform's default behavior using the `-replace=`... planning option when you run either `terraform plan` or `terraform apply`
 
 ```
 terraform apply -replace="aws_instance.example[0]"
@@ -911,12 +922,13 @@ $ terraform init \
 * Declare variables in `root` module of configuration by setting values using CLI options and environment variables
 	* Assign values to Root Module Variables via:
 		* Terraform Cloud Workspace ☁️
-			* TF Cloud passes Workspace t Variables the same as `.tfvars` files
+			* TF Cloud passes Workspace Variables the same as `.tfvars` files
 		* Individually with the `-var` command line option.
 			* (`terraform apply -var="image_id=ami-abc123"`)
 		* Reference the Variable file directly in `apply` and `plan` commands
 			* (`terraform apply -var-file="testing.tfvars"`)
 		* Variable definitions files (`.tfvars`), specified via command line or automatically loaded
+	
 		* Environment variables 
 			* (`terraform apply -var-file="testing.tfvars"`)
 			* Automatically loaded variable definition files:
@@ -924,7 +936,6 @@ $ terraform init \
 				2) `.auto.tfvars` or `.auto.tfvars.json`
 * Declaring them in `child` modules is done within the `module` block of `.tf` nested-block for passing values
 	* '$ export TF_VAR_image_id=ami-abc123`
-
 >* The label after the `variable` keyword is a name for the variable, which must be unique among all variables in the same module
 >* This name is used to assign a value to the variable from outside and to reference the variable's value from within the module.
 >* You cannot use the following names for variables as they are reserved module configuration block `meta-arguments`:
@@ -965,7 +976,7 @@ resource "aws_instance" "example" {
 }
 ```
 
-### Variable Definition Precedence
+### Variable Definition Precedence ([Kudos to Reddit peeps](https://www.reddit.com/r/Terraform/comments/yt8hag/variablestf_vs_terraformtfvars_whats_the/)
 
 * If the same variable is assigned multiple values, Terraform uses the _last_ value it finds, overriding any previous values. 
 * **Note that the same variable cannot be assigned multiple values within a single source.*
@@ -978,6 +989,11 @@ resource "aws_instance" "example" {
 4) Any `*.auto.tfvars` or `*.auto.tfvars.json` files, processed in lexical order of their filenames.
 5) Any `-var` and `-var-file` options on the command line, in the order they are provided. (This includes variables set by a Terraform Cloud workspace.)
 
+### `variables.tf` **VS** `terraform.tfvars`**:
+	* `variables.tf` = The declaration of variables, name, type, description, default values and additional meta data.
+	 - More specifically, the variables you want to be able to pass into the module for it to work the way you want it to.
+	* `terraform.tfvars` = The actual variable values during execution. (Allows specific execution and environment-specific variables with a single configuration file) **<---** **This file should be included in** `.gitignore` **VCS as is sensitive**.
+	
 ### Arguments
 
 Terraform CLI defines the following optional arguments for variable declarations:
@@ -1451,6 +1467,7 @@ resource "aws_elastic_beanstalk_environment" "tfenvtest" {
 <br>
 
 * **Sentinel**:
+	* **Sentinel allows Terraform users to apply policy as code to enforce standardized configurations for resources being deployed via infrastructure as code**
 	* Sentinel policies are defined using the **sentinel policy language** (configuration files = `.sentinel` file ext, mock files = `sentinel.hcl` file ext) and added to **policy sets** so that Terraform Cloud can enforce on a workspace
 	* Sentinel policies are available in the Terraform Cloud Team and Governance tier.
 	* Sentinel tests requirements against imported data, resulting in a `Pass` or `Fail` (`sentinel apply <filename>.sentinel`)
