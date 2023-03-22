@@ -33,10 +33,6 @@
 	* [View on GitHub](https://github.com/collabnix/terraform)
 *  [Lock and Upgrade Provider Versions](https://developer.hashicorp.com/terraform/tutorials/configuration-language/provider-versioning)
 
-## What is immutable infrastructure?
-
-* Immutable infrastructure is an approach to managing services and software deployments on IT resources wherein components are replaced rather than changed.
-
 ------------------------------------------------------------------------
 
 📚 `Exam Topics`
@@ -125,12 +121,16 @@ All other systems           ~/.terraform.d/plugins
 
 * [Terraform Registry](https://registry.Terraform.io/) includes publically available provider templates
 
+<br>
+
 ### **Terraform Workflow**
 
 1) Write
 2) Plan
 3) Apply
-	
+
+<br>
+
 | **Terraform Workflow State** | **Definition** |
 | ------ | ------ |
 | **Write:** | You define resources, which may be across multiple cloud providers and services. Configuration components called Modules define configutable collections of infrastructure. |
@@ -170,6 +170,12 @@ All other systems           ~/.terraform.d/plugins
 <summary><b>Describe advantages of IaC patterns</b></summary>
 <br>
 
+### What is immutable infrastructure?
+
+* **Immutable infrastructure** is an approach to managing services and software deployments on IT resources wherein components are replaced rather than changed.
+	* I.E, using golden images, server templates, container images to re-create a certain moment in time. These are also part of the CI/CD process
+* This reduces the potential of configuration drift
+	
 * Automation for efficiency of deployment and maintenance 
 * Version control, transparency of documentation and auditing of logs by checking into version control systems, E.G GitHub, GitLab, BitBucket
 * Cleaner CI/CD pipeline with approvals
@@ -202,7 +208,7 @@ All other systems           ~/.terraform.d/plugins
 
 * Increases fault-tolerance, allowing for more graceful recovery from cloud provider outages
 
-> *Disadvantages:
+> **Disadvantages**:
 > 	* Each cloud provider having unique interface, tools and workflows can add complexity
 > 	* This is resolved with Terraform's single configuration syntax approach
 
@@ -251,6 +257,10 @@ provider "google" {  <---- Start of argument
 } <---- EOF argument
 ```
 
+* Terraform does not explicitly require the `provider` statement in a config and is able to read the resource in some cases to determine the provider required
+* Anyone can write a `provider` for private/public registry use
+* Some `providers` are owned and maintained by HashiCorp within the public Terraform registry
+	
 - Expressions are allowed in the values of configuration arguments but only that can be known before the configuration is applied
 	- I.E, input variables
 - Terraform assumes an empty default configuration for any provider that is not explicitly configured
@@ -263,6 +273,13 @@ provider "google" {  <---- Start of argument
 
 ### Terraform Settings
 
+* Not relevant to the Terraform configuration per say, but relevant to an administrator configuring Terraform:
+	* The **CLI configuration file** configures per-user settings for CLI behaviors, which apply across all Terraform working directories.
+	* It is named either `.terraformrc` or `terraform.rc`
+		- Windows = User `%APPDATA%` directory
+		- All other OS = User `/` (home) directory
+		- Specify the location with environment variable `TF_CLI_CONFIG_FILE`
+	
 * Terraform settings are gathered together into `terraform` blocks:
 
 ```
@@ -332,7 +349,8 @@ version control system if they represent changes you intended to make.
 <summary><b>Demonstrate using multiple providers</b></summary>
 <br>
 
-*See above notes
+* Multiple providers are configured each with their own `provider {` block within the configuration
+* When using multiple regions or environments within the same provider, use the `alias` keyword within the `provider {` block
 
 <br>
 </details>
@@ -341,22 +359,29 @@ version control system if they represent changes you intended to make.
 <summary><b>Describe how Terraform finds and fetches providers</b></summary>
 <br>
 
-*See above notes
+* Following a `terraform init`, provider's plugins (as well as modules) are downloaded according to the configuration specifications - **not all providers**
+* Stored locally in CWD (current working directory) `./terraform.d/providers`
 
 <br>
-
 </details>
 
 <details>
 <summary><b>Explain when to use and not use provisioners and when to use local-exec or remote-exec</b></summary>
-
 <br>
 
+* `local-exec` is to run commands on the local Terraform workstation
+* `remote-exec` is to execute commands or scripts on a remote resource
+	- By default, a resource will **not** be deployed during `terraform apply` (`on_failure = fail`) if the provisioner fails but can be overriden (`on_failure = continue`)
 * Supported `remote-exec` types are `ssh` and `winrm`.
 	
+<br>
+
 ### Provisioners:
 
 * Provisioners are a last resort since there are always certain behaviors that cannot be directly represented in Terraform's declarative model.
+	* I.E, Terraform is unable to decipher what is going on with the actual resource following a provisioning attempt
+	* Recommended to use Ansible, Chef, Pupper etc.
+
 	* Add complexity and uncertainty in Terraform usage
 	* ** Terraform cannot model the actions of provisioners as part of a plan because they can in principle take any action.** (god mode) and also require more details than Terraform usage usually requires. Exampls:
 		* Direct network access to servers
@@ -415,7 +440,9 @@ resource "aws_instance" "web" {
 <summary><b>Given a scenario: choose when to use `Terraform taint` to taint Terraform resources</b></summary>
 <br>
 
-########## **Deprecated** ########## (recommend `terraform apply -replace` option _>=v0.15.2_)
+**Deprecated** (recommend `terraform apply -replace` option _>=v0.15.2_)
+<br>
+
 * `terraform taint` command informs Terraform that a particular object has become degraded or damaged and marks it as such within the Terraform state file to propose a replace in the next upcoming Terraform plan.
 * Example of using Terraform (`-replace`) option to replace object with no configuration changes:
 
@@ -454,16 +481,16 @@ terraform apply -replace="aws_instance.example[0]"
 	* I.E, the configuration only has one backend, but allows deployment of multiple distinct instances of that config without additional backends and configurations
 	* **Workspaces are not appropriate for deployments requiring separate credentials and access controls**
 * Multiple workspaces are acceptable with the following backends:
-	* AzureRM
-	* Consul
-	* COS
-	* GCS
-	* Kubernetes
-	* Local
-	* OSS
-	* Postgres
-	* Remote
-	* S3
+	* `AzureRM`
+	* `Consul`
+	* `COS`
+	* `GCS`
+	* `Kubernetes`
+	* `Local`
+	* `OSS`
+	* `Postgres`
+	* `Remote`
+	* `S3`
 
 <br>
 </details>
@@ -489,7 +516,7 @@ terraform apply -replace="aws_instance.example[0]"
 	* `DEBUG` <--- Default logging level
 	* `INFO`
 	* `WARN`
-	* `ERROR
+	* `ERROR`
 * To persist logged output you can set `TF_LOG_PATH` in order to force the log to always be appended to a specific file when logging is enabled. 
 * **When `TF_LOG_PATH` is set, `TF_LOG` must be set in order for any logging to be enabled.**
 
@@ -508,6 +535,9 @@ terraform apply -replace="aws_instance.example[0]"
 _Modules_ are containers for multiple resources that are used together. A module consists of a collection of `.tf` and/or `.tf.json` files kept together in a directory.
 ```
 
+* Default module = `default`
+* Even a single directory comprising of Terraform configuration is configured a directory
+	
 * A Terraform module is a set of Terraform configuration files in a single directory. 
 * Even a simple configuration consisting of a single directory with one or more `.tf` files is a module. I.E:
 	* Running Terraform commands from the directory ensures that it is considered the **root** module.
@@ -558,13 +588,17 @@ _Modules_ are containers for multiple resources that are used together. A modul
 	- Input variables let you customize aspects of Terraform modules without altering the module's own source code.
 	- Each input variable accepted by a module must be declared using a variable block
 	- Within the module that declared a variable, its value can be accessed from within [expressions](https://developer.hashicorp.com/terraform/language/expressions) as `var.<NAME>`, where `<NAME>` matches the label given in the declaration block
--   **[Output values]**(https://developer.hashicorp.com/terraform/language/values/outputs) are like function return values.
+<br>
+	
+* **[Output values](https://developer.hashicorp.com/terraform/language/values/outputs)** are like function return values.
 	- Output values make information about your infrastructure available on the command line, and can expose information for other Terraform configurations to use. 
 	- Output values are similar to return values in programming languages.
 	- Each output value exported by a module must be declared using an `output` block
 		- Outputs are only rendered when Terraform applies your plan. 
 		- Running terraform plan will not render outputs
--   **[Local values]**(https://developer.hashicorp.com/terraform/language/values/locals) are like a function's temporary local variables.
+<br>
+	
+* **[Local values](https://developer.hashicorp.com/terraform/language/values/locals)** are like a function's temporary local variables.
 
 * Module input resources are encpsulated so the calling module cannot access their attributes directly. However, a child module can declare [output values](https://developer.hashicorp.com/terraform/language/values/outputs) to selectively export certain values to be accessed by the calling module.
 
@@ -617,6 +651,8 @@ hashicorp/consul/aws <---- Example verified module
 * Each module in the registry is versioned. 
 * These versions syntactically must follow [semantic versioning](http://semver.org/):
 
+<br>
+
 | **Semantic Versioning Conformity** | **Definition** |
 | ------ | ------ |
 | **MAJOR:** | Version when you make incompatible API changes  |
@@ -635,7 +671,6 @@ hashicorp/consul/aws <---- Example verified module
 <details>
 <summary><b>Describe Terraform workflow (` Write -> Plan -> Create `)</b></summary>
 <br>
-
 
 | **Terraform Workflow State** | **Definition** |
 | ------ | ------ |
@@ -976,7 +1011,7 @@ resource "aws_instance" "example" {
 }
 ```
 
-### Variable Definition Precedence ([Kudos to Reddit peeps](https://www.reddit.com/r/Terraform/comments/yt8hag/variablestf_vs_terraformtfvars_whats_the/)
+### Variable Definition Precedence (Kudos to Reddit peeps](https://www.reddit.com/r/Terraform/comments/yt8hag/variablestf_vs_terraformtfvars_whats_the/)
 
 * If the same variable is assigned multiple values, Terraform uses the _last_ value it finds, overriding any previous values. 
 * **Note that the same variable cannot be assigned multiple values within a single source.*
@@ -1024,6 +1059,8 @@ variable "image_id" {
 -   [`nullable`](https://developer.hashicorp.com/terraform/language/values/variables#disallowing-null-input-values) - Specify if the variable can be `null` within the module **and overrides the default value**
 	- `nullable = true` OR `nullable=true`
 
+<br>
+		
 ## **Output Variables:** (AKA *Function Return Values* or `outputs`)
 * Output values make information about your infrastructure available on the command line, and can expose information for other Terraform configurations to use. I.E:
 	1) A child module can use outputs to expose a subset of its resource attributes to a parent module
@@ -1113,6 +1150,8 @@ resource "aws_instance" "example" {
 <details>
 <summary><b>Describe secure secret injection best practice</b></summary>
 <br>
+
+[A comprehensive guide to managing secrets in your Terraform code](https://blog.gruntwork.io/a-comprehensive-guide-to-managing-secrets-in-your-terraform-code-1d586955ace1)
 
 * Hashicorp Vault as a Terraform provider allows read from, write to and configure Vault
 * Remember to use `sensitive=true` to redact secrets being persisted in Terraforms `terraform.tfstate` and `plan` files
@@ -1213,11 +1252,11 @@ resource "aws_instance" "web" {
 		* Generating random ID's
 	* Obviously Local Resources only exist in `terraform.tfstate` and not real-world infrastructure
 
-### * **Managed Resources vs Data Resources**:
+### **Managed Resources vs Data Resources**:
 	* `Managed Resources` cause Terraform to create, update, and delete infrastructure objects
 	* `Data Resources` cause Terraform only to _read_ objects.
 
-* **Data Sources:**:
+* **Data Sources:**
 	* Data Source is accessed via a special kind of resource known as a data resource, must be unique and locally inta-Module relevant. The Data Source are also `provider`-relevant.
 	* Data Source `meta-arguments` are not provider-relevant and generic across all data sources.
 	* Each data resource is associated with a single data source, which determines the kind of object (or objects) it reads and what query constraint arguments are available.
@@ -1519,7 +1558,7 @@ For workspaces with remote operations enabled (the default), Terraform Cloud per
 * **`Enterprise/Cloud` Workspaces**:
 * Since **Terraform CLI** uses content from the directory it runs in, you can organize infrastructure resources into meaningful groups by keeping their configurations in separate directories.
 * **Terraform Cloud manages infrastructure collections with workspaces instead of directories and separate workspaces function like completely separate working directories.**
-* **Health Assessments (Terraform Cloud Business tier) are used to validate workspace Terraform operations to real-world infrastructure (`declarative behavior` and to eradicate configuration drift etc.
+* **Health Assessments** (Terraform Cloud Business tier) are used to validate workspace Terraform operations to real-world infrastructure (`declarative behavior` and to eradicate configuration drift etc.
  
 * **Terraform Cloud vs. Terraform CLI Workspaces**
 	* Cloud Workspaces are required before any configuration of Resources** (which is not the case for CLI workspaces) and are a method for deploying RBAC
@@ -1531,11 +1570,11 @@ For workspaces with remote operations enabled (the default), Terraform Cloud per
 <summary><b>Summarize features of Terraform Cloud ☁️</b></summary>
 <br>
 
-* Terraform Cloud is available as a hosted service at [https://app.terraform.io](https://app.terraform.io/) (SaaS)
+* Terraform Cloud is available as a hosted service at [app.terraform.io](https://app.terraform.io/) (SaaS)
 * Although Terraform Cloud is deployed as SaaS, it has three workflows for managing `terraform runs`:
 	* **UI/VCS-driven** = Primary mode, specific branch of a VCS repo of `.tf` configurations and webhooks with your VCS provider
 	* **API-driven** = Terraform SaaS API calls
-	* **CLI-driven** = Manage Terraform with TF cloud via a CLI as if local
+	* **CLI-driven** = Manage Terraform with TF cloud via a CLI as if local and **requires an API token** (`terraform login`)
 
 * Terraform Cloud ☁️ Features Summarized:
 	* IaC HCL
@@ -1603,13 +1642,16 @@ It is common to use a combination of Terraform and Ansible for example, `Terribl
 <summary><b>`Declarative` vs `Imperative`</b></summary>
 <br>
 
-## Declarative vs Imperative:
-
-* Imperative programming is like giving a chef step-by-step instructions on how to make a pizza. (Chef and Ansible encourage a procedural style in which you write code that specifies, step by step, how to achieve some desired end state)
-
-- Vanilla JavaScript is an example of Imperative programming
-* Declarative programming is like ordering a pizza without being concerned about the steps it takes to make the pizza.
-- React is a popular example of Declarative programming.
+## **Declarative** vs **Imperative**:
+<br>
+	
+* Terraform is **Declarative** and always approaches to reach a desired end-state
+	
+* **Imperative programming** is like giving a chef step-by-step instructions on how to make a pizza. (Chef and Ansible encourage a procedural style in which you write code that specifies, step by step, how to achieve some desired end state)
+	- Vanilla JavaScript is an example of Imperative programming
+	
+* **Declarative programming** is like ordering a pizza without being concerned about the steps it takes to make the pizza.
+	- React is a popular example of Declarative programming.
 
 Imperative code focuses on writing an explicit sequence of commands to describe how you want the computer to do things using procedural scripts, and declarative code focuses on specifying the result of what you want; and by instructing Terraform to work out the end desired state of infrastructure based on what is currently spinning.
 - **Procedural code does not fully capture the state of the infrastructure**
@@ -1627,7 +1669,9 @@ Imperative code focuses on writing an explicit sequence of commands to describe 
 * Terraform starts with a single workspace called “default,” and if you never explicitly specify a workspace, the default workspace is the one you’ll use the entire time.
 * Workspaces are not visible within the configuration files or unless explicitly stated using Workspace commands in the terminal
 
-Terraform outputs dependencies output in graph description language (GDL), called DOT. Recommended to better visualize this with tools such as [GraphvizOnline](https://graphviz.org/). An example dependency for an EC2 instance is a VPC, Security Group, Region etc.
+Terraform outputs dependencies output in graph description language via `terraform graph` (GDL), called DOT. Recommended to better visualize this with tools such as [GraphvizOnline](https://graphviz.org/). An example dependency for an EC2 instance is a VPC, Security Group, Region etc.
+
+<br>
 
 - **Terraform Config Tags/Variables:**
 
@@ -1646,8 +1690,7 @@ Terraform outputs dependencies output in graph description language (GDL), calle
 
 * Experiment with **Terraform Syntax, ARGS and Functions** by entering the **Terraform Console**: (**READ ONLY**)
 
-
-`$ terraform console .... <---- I am read-only`
+`$ terraform console .... <---- I am read-only` **Requires the ability to lock the state prior to execution**
 
 * Terraform `File Layout` provides a true, recommended method of isolation
 - Place configuration files in seperate file directories
@@ -1656,6 +1699,8 @@ Terraform outputs dependencies output in graph description language (GDL), calle
 - Splitting components into separate folders prevents you from accidentally blowing up your entire infrastructure in one command, but it also prevents you from creating your entire infrastructure in one command.
 - I.E, when working multiple folders; a `terraform plan`/ `terraform apply` is required in each folder
 - A workaround for this is to use [**Terragrunt**](https://terragrunt.gruntwork.io/) using the `run-all-command` for **clean**, `DRY` code.
+
+<br>
 
 * **Terraform Modules**
 
@@ -1707,11 +1752,15 @@ type = string
 * Terraform `LOCAL Modules` values allow you to assign a name to any Terraform expression and to use that name throughout the module.
 * The names (`local.<NAME>) are only visible within the module and cannot be overriden from outside the module
 
+```
 locals {
 http_port = 80
 }
-
+```
+	
 * `MODULE OUTPUTS` == `module.<MODULE_NAME>.<OUTPUT_NAME>` to access module output variables
+
+<br>
 
 * **Terraform Module Versions**
 
@@ -1720,6 +1769,7 @@ http_port = 80
 * The ref parameter allows you to specify a particular Git commit via its sha1 hash, a branch name, or, as in this example, a specific Git tag.
 
 * **Use Semantic Versioning** (`MAJOR.MINOR.PATCH`) for GitOps tags
+<br>
 
 ```
 module "webserver_cluster" {
@@ -1737,7 +1787,7 @@ max_size = 2
 </details>
 
 <details>
-<summary><b>PROGRESS - Page 246</b></summary>
+<summary><b>PROGRESS - Page 246 - TBC</b></summary>
 <br>
 </details>
 
